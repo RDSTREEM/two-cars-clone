@@ -10,11 +10,12 @@
 #include <cstdlib>
 #include <algorithm>
 #include <fstream>
+#include <random>
 
-#define SCREEN_WIDTH 540
-#define SCREEN_HEIGHT 960
-#define CAR_WIDTH 50
-#define CAR_HEIGHT 80
+#define SCREEN_WIDTH 405
+#define SCREEN_HEIGHT 720
+#define CAR_WIDTH SCREEN_WIDTH / 10
+#define CAR_HEIGHT SCREEN_HEIGHT / 11
 #define LANE_WIDTH (SCREEN_WIDTH / 4)
 #define LANE_1 (LANE_WIDTH / 2 - CAR_WIDTH / 2)
 #define LANE_2 (LANE_WIDTH + LANE_WIDTH / 2 - CAR_WIDTH / 2)
@@ -48,11 +49,11 @@ public:
     double angle = 0;
     bool rotating = false;
     Uint32 rotationStartTime;
-    const int rotationDuration = 200;
+    const Uint32 rotationDuration = 200;
     bool moving = false;
     int targetX;
     Uint32 moveStartTime;
-    const int moveDuration = 200;
+    const Uint32 moveDuration = 200;
 
     void updateRotation()
     {
@@ -276,7 +277,7 @@ void Game::spawnObstacle()
     if (patternTimer == 0)
     {
         std::vector<int> lanes = {0, 1, 2, 3};
-        std::random_shuffle(lanes.begin(), lanes.end());
+        std::shuffle(lanes.begin(), lanes.end(), std::default_random_engine(std::random_device()()));
 
         bool redBoxSpawned = false;
         bool blueBoxSpawned = false;
@@ -414,7 +415,7 @@ void Game::increaseDifficulty()
 {
     static Uint32 lastIncreaseTime = 0;
     Uint32 currentTime = SDL_GetTicks();
-    int elapsedTime = (currentTime - startTime) / 1000;
+    Uint32 elapsedTime = (currentTime - startTime) / 1000;
 
     if (elapsedTime % 15 == 0 && currentTime - lastIncreaseTime >= 1000)
     {
@@ -640,7 +641,7 @@ void Game::render()
 
                 TTF_CloseFont(font);
             }
-            else if (!font)
+            else
             {
                 std::cout << "TTF_OpenFont failed: " << TTF_GetError() << std::endl;
             }

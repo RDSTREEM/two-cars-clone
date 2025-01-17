@@ -2,7 +2,7 @@ CC = g++
 INCLUDE = -I dependencies/include
 LIB = -L dependencies/lib
 LIBS = -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g -mwindows
 LDFLAGS = -static-libgcc -static-libstdc++
 
 SRC = main.cpp
