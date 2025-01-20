@@ -52,16 +52,16 @@ Before running the game, ensure you have the following installed on your system:
 ---
 
 ## Controls
-- **Left Arrow**: Move the left car.
-- **Right Arrow**: Move the right car.
+- **A**: Move the left car.
+- **D**: Move the right car.
 
 ---
 
 ## Roadmap
-- [ ] Add increasing difficulty over time.
-- [ ] Implement score and high score tracking.
+- [x] Add increasing difficulty over time.
+- [x] Implement score and high score tracking.
 - [ ] Add a two-player mode.
-- [ ] Enhance graphics and animations.
+- [x] Enhance graphics and animations.
 
 ---
 
