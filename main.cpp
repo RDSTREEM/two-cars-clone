@@ -113,7 +113,6 @@ private:
     SDL_Renderer *renderer;
     std::vector<Entity> obstacles;
     Car blueCar, redCar;
-    int timer;
     Uint32 startTime;
     int score = 0;
     int spawnRate = 80;
@@ -138,7 +137,6 @@ private:
     SDL_Texture *redBox;
     SDL_Texture *blueCircle;
     SDL_Texture *blueBox;
-    SDL_Texture *endScreenOverlay;
     SDL_Rect restartButtonRect, homeButtonRect;
     Mix_Music *backgroundMusic;
     int highscore = 0;
@@ -201,6 +199,10 @@ void Game::loadAssets()
 {
     SDL_Surface *tmpSurface;
 
+    tmpSurface = IMG_Load("assets/icon.png");
+    SDL_SetWindowIcon(window, tmpSurface);
+    SDL_FreeSurface(tmpSurface);
+
     tmpSurface = IMG_Load("assets/car-red.png");
     redCar.texture = SDL_CreateTextureFromSurface(renderer, tmpSurface);
     SDL_FreeSurface(tmpSurface);
@@ -223,10 +225,6 @@ void Game::loadAssets()
 
     tmpSurface = IMG_Load("assets/box-blue.png");
     blueBox = SDL_CreateTextureFromSurface(renderer, tmpSurface);
-    SDL_FreeSurface(tmpSurface);
-
-    tmpSurface = IMG_Load("assets/end-screen-overlay.png");
-    endScreenOverlay = SDL_CreateTextureFromSurface(renderer, tmpSurface);
     SDL_FreeSurface(tmpSurface);
 
     circlePickupSound = Mix_LoadWAV("assets/sfx/circle_pickup.wav");
@@ -417,9 +415,9 @@ void Game::increaseDifficulty()
     Uint32 currentTime = SDL_GetTicks();
     Uint32 elapsedTime = (currentTime - startTime) / 1000;
 
-    if (elapsedTime % 15 == 0 && currentTime - lastIncreaseTime >= 1000)
+    if (elapsedTime % 30 == 0 && currentTime - lastIncreaseTime >= 1000)
     {
-        if (spawnRate > 10)
+        if (spawnRate > 20)
             spawnRate -= 20;
         if (obstacleSpeed < 15)
             obstacleSpeed += 2;
@@ -447,6 +445,10 @@ void Game::handleEvents()
             if (event.key.keysym.sym == SDLK_ESCAPE)
             {
                 currentState = MAIN_MENU;
+                score = 0;
+                obstacles.clear();
+                spawnRate = 80;
+                obstacleSpeed = 6;
             }
             else if (event.key.keysym.sym == SDLK_a)
             {
@@ -483,6 +485,8 @@ void Game::handleEvents()
         {
             if (event.key.keysym.sym == SDLK_r)
             {
+                blueCar.destRect = {LANE_1, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
+                redCar.destRect = {LANE_4, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
                 currentState = NORMAL_MODE;
                 score = 0;
                 obstacles.clear();
@@ -492,6 +496,8 @@ void Game::handleEvents()
             }
             else if (event.key.keysym.sym == SDLK_h)
             {
+                blueCar.destRect = {LANE_1, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
+                redCar.destRect = {LANE_4, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
                 currentState = MAIN_MENU;
                 score = 0;
                 obstacles.clear();
@@ -501,7 +507,18 @@ void Game::handleEvents()
         }
         break;
     case SDL_MOUSEBUTTONDOWN:
-        if (currentState == DEATH_SCREEN)
+        if (currentState == MAIN_MENU)
+        {
+            blueCar.destRect = {LANE_1, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
+            redCar.destRect = {LANE_4, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
+            currentState = NORMAL_MODE;
+            score = 0;
+            obstacles.clear();
+            startTime = SDL_GetTicks();
+            spawnRate = 80;
+            obstacleSpeed = 6;
+        }
+        else if (currentState == DEATH_SCREEN)
         {
             int x, y;
             SDL_GetMouseState(&x, &y);
@@ -570,22 +587,17 @@ void Game::render()
     }
     else if (currentState == NORMAL_MODE || currentState == DEATH_SCREEN)
     {
-        // Draw lanes
-        SDL_SetRenderDrawColor(renderer, 117, 138, 219, 255); // Line color
 
-        // Left lane line
+        SDL_SetRenderDrawColor(renderer, 117, 138, 219, 255);
+
         SDL_RenderDrawLine(renderer, LANE_WIDTH, 0, LANE_WIDTH, SCREEN_HEIGHT);
 
-        // Middle lane line (thicker)
         for (int i = -2; i <= 2; ++i)
         {
             SDL_RenderDrawLine(renderer, 2 * LANE_WIDTH + i, 0, 2 * LANE_WIDTH + i, SCREEN_HEIGHT);
         }
-
-        // Right lane line
         SDL_RenderDrawLine(renderer, 3 * LANE_WIDTH, 0, 3 * LANE_WIDTH, SCREEN_HEIGHT);
 
-        // Render cars and obstacles
         SDL_RenderCopyEx(renderer, blueCar.texture, NULL, &blueCar.destRect, blueCar.angle, NULL, SDL_FLIP_NONE);
         SDL_RenderCopyEx(renderer, redCar.texture, NULL, &redCar.destRect, redCar.angle, NULL, SDL_FLIP_NONE);
 
@@ -599,7 +611,6 @@ void Game::render()
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200);
             SDL_RenderFillRect(renderer, NULL);
-            SDL_RenderCopy(renderer, endScreenOverlay, NULL, NULL);
 
             TTF_Font *font = TTF_OpenFont("assets/Silkscreen-Regular.ttf", 24);
             if (font)
@@ -666,7 +677,6 @@ void Game::clean()
     SDL_DestroyTexture(redCircle);
     SDL_DestroyTexture(blueBox);
     SDL_DestroyTexture(blueCircle);
-    SDL_DestroyTexture(endScreenOverlay);
     SDL_DestroyTexture(titleTextTexture);
     SDL_DestroyTexture(playTextTexture1);
     SDL_DestroyTexture(playTextTexture2);
@@ -686,20 +696,23 @@ void Game::clean()
 
 void Game::loadHighscore()
 {
-    std::ifstream file("highscore.txt");
+    std::ifstream file("player.dat", std::ios::binary);
     if (file.is_open())
     {
-        file >> highscore;
+        int encodedHighscore;
+        file.read(reinterpret_cast<char *>(&encodedHighscore), sizeof(encodedHighscore));
+        highscore = encodedHighscore ^ 0xA5A5A5A5; // Simple XOR encoding
         file.close();
     }
 }
 
 void Game::saveHighscore()
 {
-    std::ofstream file("highscore.txt");
+    std::ofstream file("player.dat", std::ios::binary);
     if (file.is_open())
     {
-        file << highscore;
+        int encodedHighscore = highscore ^ 0xA5A5A5A5; // Simple XOR encoding
+        file.write(reinterpret_cast<const char *>(&encodedHighscore), sizeof(encodedHighscore));
         file.close();
     }
 }

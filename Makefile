@@ -10,6 +10,3 @@ TARGET = main
 
 all:
 	$(CC) $(CFLAGS) $(INCLUDE) $(LIB) -o $(TARGET) $(SRC) $(LIBS) $(LDFLAGS)
-
-clean:
-	rm -f $(TARGET)
