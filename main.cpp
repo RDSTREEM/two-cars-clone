@@ -1,3 +1,6 @@
+// ============================= INCLUDES ============================= //
+// Includes SDL2 libraries for graphics, text rendering, and audio.
+// Includes standard C++ libraries for strings, vectors, math, file I/O, and random generation.
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_image.h"
 #include "SDL2/SDL_ttf.h"
@@ -11,7 +14,11 @@
 #include <algorithm>
 #include <fstream>
 #include <random>
+using namespace std;
 
+// ============================= DEFINITIONS ============================= //
+// Constants for screen size, car dimensions, and lane positions.
+// These values are used for scaling and positioning elements in the game.
 #define SCREEN_WIDTH 405
 #define SCREEN_HEIGHT 720
 #define CAR_WIDTH SCREEN_WIDTH / 10
@@ -23,6 +30,8 @@
 #define LANE_4 (3 * LANE_WIDTH + LANE_WIDTH / 2 - CAR_WIDTH / 2)
 #define OBSTACLE_SIZE SCREEN_WIDTH / 10
 
+// ============================= GAME STATE ENUM ============================= //
+// Represents the game's current state (menu, active play, or game over).
 enum GameState
 {
     MAIN_MENU,
@@ -30,6 +39,9 @@ enum GameState
     DEATH_SCREEN
 };
 
+// ============================= ENTITY CLASS ============================= //
+// Base class for renderable objects like cars or obstacles.
+// Manages texture, size, and rendering properties.
 class Entity
 {
 public:
@@ -37,12 +49,15 @@ public:
     SDL_Rect srcRect, destRect;
     bool collected = false;
 
+    // Draws the entity on the screen by copying its texture to the renderer.
     void render(SDL_Renderer *renderer)
     {
         SDL_RenderCopy(renderer, texture, NULL, &destRect);
     }
 };
 
+// ============================= CAR CLASS ============================= //
+// Represents a player's car with added movement and rotation functionality.
 class Car : public Entity
 {
 public:
@@ -55,6 +70,7 @@ public:
     Uint32 moveStartTime;
     const Uint32 moveDuration = 200;
 
+    // Uses a sine wave to calculate the angle the car should rotate while moving.
     void updateRotation()
     {
         Uint32 currentTime = SDL_GetTicks();
@@ -73,6 +89,7 @@ public:
         }
     }
 
+    // Make the car go smoothly when changing lanes.
     void updateMovement()
     {
         Uint32 currentTime = SDL_GetTicks();
@@ -93,6 +110,8 @@ public:
     }
 };
 
+// ============================= GAME CLASS ============================= //
+// Manages the game loop, event handling, rendering, and state transitions.
 class Game
 {
 public:
@@ -111,7 +130,7 @@ private:
     GameState currentState;
     SDL_Window *window;
     SDL_Renderer *renderer;
-    std::vector<Entity> obstacles;
+    vector<Entity> obstacles;
     Car blueCar, redCar;
     Uint32 startTime;
     int score = 0;
@@ -147,7 +166,9 @@ private:
     void checkCollision();
     void increaseDifficulty();
     void updateMenuAnimation();
+    void resetCars();
     void renderMenu();
+    void renderDeathScreen();
     void loadHighscore();
     void saveHighscore();
 };
@@ -155,6 +176,8 @@ private:
 Game::Game() {}
 Game::~Game() {}
 
+// ============================= INIT METHOD ============================= //
+// Sets up SDL systems, creates the game window, loads assets, and initializes the game state.
 void Game::init(const char *title, int xpos, int ypos, int width, int height, bool fullscreen)
 {
     int flags = 0;
@@ -170,9 +193,14 @@ void Game::init(const char *title, int xpos, int ypos, int width, int height, bo
 
         if (TTF_Init() == -1)
         {
-            std::cerr << "SDL_ttf could not initialize! SDL_ttf Error: " << TTF_GetError() << std::endl;
+            cerr << "SDL_ttf could not initialize! SDL_ttf Error: " << TTF_GetError() << endl;
             isRunning = false;
             return;
+        }
+
+        if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
+        {
+            cerr << "SDL_mixer could not initialize! SDL_mixer Error: " << Mix_GetError() << endl;
         }
 
         isRunning = true;
@@ -185,7 +213,7 @@ void Game::init(const char *title, int xpos, int ypos, int width, int height, bo
         {
             if (Mix_PlayMusic(backgroundMusic, -1) == -1)
             {
-                std::cerr << "Failed to play background music! SDL_mixer Error: " << Mix_GetError() << std::endl;
+                cerr << "Failed to play background music! SDL_mixer Error: " << Mix_GetError() << endl;
             }
         }
     }
@@ -195,6 +223,9 @@ void Game::init(const char *title, int xpos, int ypos, int width, int height, bo
     }
 }
 
+// ============================= ASSET LOADING ============================= //
+// Loads textures, sounds, and fonts needed for the game.
+// Also sets default positions and properties for cars and obstacles.
 void Game::loadAssets()
 {
     SDL_Surface *tmpSurface;
@@ -265,18 +296,21 @@ void Game::loadAssets()
     backgroundMusic = Mix_LoadMUS("assets/sfx/background-music.mp3");
     if (!backgroundMusic)
     {
-        std::cerr << "Failed to load background music! SDL_mixer Error: " << Mix_GetError() << std::endl;
+        cerr << "Failed to load background music! SDL_mixer Error: " << Mix_GetError() << endl;
     }
 }
 
+// ============================= SPAWNING OBSTACLES ============================= //
+// Dynamically creates obstacles at random lanes with proper spacing.
 void Game::spawnObstacle()
 {
     static int patternTimer = 0;
     if (patternTimer == 0)
     {
-        std::vector<int> lanes = {0, 1, 2, 3};
-        std::shuffle(lanes.begin(), lanes.end(), std::default_random_engine(std::random_device()()));
+        vector<int> lanes = {0, 1, 2, 3};
+        shuffle(lanes.begin(), lanes.end(), default_random_engine(random_device()()));
 
+        // Boolean values to make sure the game doesnt become impossible by spawning 2 boxes at the same time.
         bool redBoxSpawned = false;
         bool blueBoxSpawned = false;
         bool redCircleSpawned = false;
@@ -344,14 +378,18 @@ void Game::spawnObstacle()
     }
 }
 
+// ============================= OBSTACLE UPDATES ============================= //
+// Moves obstacles downward and removes off-screen ones.
+// Handles game-over logic if collectible obstacles are missed.
 void Game::updateObstacles()
 {
     for (auto &obstacle : obstacles)
     {
         obstacle.destRect.y += obstacleSpeed;
     }
-    obstacles.erase(std::remove_if(obstacles.begin(), obstacles.end(), [this](Entity &o)
-                                   {
+    // Destroy any obstacle that is below the screen.
+    obstacles.erase(remove_if(obstacles.begin(), obstacles.end(), [this](Entity &o)
+                              {
                                        if (o.destRect.y > SCREEN_HEIGHT)
                                        {
                                            if ((o.texture == redCircle || o.texture == blueCircle) && !o.collected)
@@ -365,6 +403,9 @@ void Game::updateObstacles()
                     obstacles.end());
 }
 
+// ============================= COLLISION DETECTION ============================= //
+// Detects collisions between cars and obstacles.
+// Updates score and transitions to game over if a collision occurs.
 void Game::checkCollision()
 {
     for (auto &obstacle : obstacles)
@@ -398,8 +439,8 @@ void Game::checkCollision()
             }
         }
     }
-    obstacles.erase(std::remove_if(obstacles.begin(), obstacles.end(), [](Entity &o)
-                                   { return o.collected; }),
+    obstacles.erase(remove_if(obstacles.begin(), obstacles.end(), [](Entity &o)
+                              { return o.collected; }),
                     obstacles.end());
 
     if (currentState == DEATH_SCREEN && score > highscore)
@@ -409,6 +450,8 @@ void Game::checkCollision()
     }
 }
 
+// ============================= DIFFICULTY PROGRESSION ============================= //
+// Gradually increases the spawn rate and speed of obstacles over time.
 void Game::increaseDifficulty()
 {
     static Uint32 lastIncreaseTime = 0;
@@ -425,6 +468,8 @@ void Game::increaseDifficulty()
     }
 }
 
+// ============================ HANDLING USER INTERACTION ============================ //
+// Handles any type of event from the user in all states of the game.
 void Game::handleEvents()
 {
     SDL_Event event;
@@ -439,6 +484,7 @@ void Game::handleEvents()
         {
             currentState = NORMAL_MODE;
             startTime = SDL_GetTicks();
+            resetCars();
         }
         else if (currentState == NORMAL_MODE)
         {
@@ -485,38 +531,24 @@ void Game::handleEvents()
         {
             if (event.key.keysym.sym == SDLK_r)
             {
-                blueCar.destRect = {LANE_1, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
-                redCar.destRect = {LANE_4, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
-                currentState = NORMAL_MODE;
-                score = 0;
-                obstacles.clear();
                 startTime = SDL_GetTicks();
-                spawnRate = 80;
-                obstacleSpeed = 6;
+                currentState = NORMAL_MODE;
+                resetCars();
             }
             else if (event.key.keysym.sym == SDLK_h)
             {
-                blueCar.destRect = {LANE_1, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
-                redCar.destRect = {LANE_4, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
+                startTime = SDL_GetTicks();
                 currentState = MAIN_MENU;
-                score = 0;
-                obstacles.clear();
-                spawnRate = 80;
-                obstacleSpeed = 6;
+                resetCars();
             }
         }
         break;
     case SDL_MOUSEBUTTONDOWN:
         if (currentState == MAIN_MENU)
         {
-            blueCar.destRect = {LANE_1, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
-            redCar.destRect = {LANE_4, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
             currentState = NORMAL_MODE;
-            score = 0;
-            obstacles.clear();
             startTime = SDL_GetTicks();
-            spawnRate = 80;
-            obstacleSpeed = 6;
+            resetCars();
         }
         else if (currentState == DEATH_SCREEN)
         {
@@ -526,26 +558,22 @@ void Game::handleEvents()
                 y >= restartButtonRect.y && y <= restartButtonRect.y + restartButtonRect.h)
             {
                 currentState = NORMAL_MODE;
-                score = 0;
-                obstacles.clear();
                 startTime = SDL_GetTicks();
-                spawnRate = 80;
-                obstacleSpeed = 6;
+                resetCars();
             }
             else if (x >= homeButtonRect.x && x <= homeButtonRect.x + homeButtonRect.w &&
                      y >= homeButtonRect.y && y <= homeButtonRect.y + homeButtonRect.h)
             {
                 currentState = MAIN_MENU;
-                score = 0;
-                obstacles.clear();
-                spawnRate = 80;
-                obstacleSpeed = 6;
+                resetCars();
             }
         }
         break;
     }
 }
 
+// ============================== UPDATING ENTITIES ============================= //
+// Updates anything in the game before rendering.
 void Game::update()
 {
     if (currentState == NORMAL_MODE)
@@ -565,6 +593,8 @@ void Game::update()
     }
 }
 
+// ============================= MENU ANIMATION ============================= //
+// Animates the "Press Any Key" text in the menu by moving it up and down.
 void Game::updateMenuAnimation()
 {
     playTextYPosition += textSpeed * playTextDirection;
@@ -576,9 +606,11 @@ void Game::updateMenuAnimation()
     playTextRect2.y = playTextYPosition + playTextRect1.h;
 }
 
+// ============================== RENDERING ============================== //
+// Rendersing everything on the game in its different states.
 void Game::render()
 {
-    SDL_SetRenderDrawColor(renderer, 37, 51, 122, 255); // Background color
+    SDL_SetRenderDrawColor(renderer, 37, 51, 122, 255);
     SDL_RenderClear(renderer);
 
     if (currentState == MAIN_MENU)
@@ -608,60 +640,14 @@ void Game::render()
 
         if (currentState == DEATH_SCREEN)
         {
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200);
-            SDL_RenderFillRect(renderer, NULL);
-
-            TTF_Font *font = TTF_OpenFont("assets/Silkscreen-Regular.ttf", 24);
-            if (font)
-            {
-                SDL_Color color = {255, 255, 255, 255};
-                SDL_Surface *textSurface;
-                SDL_Texture *textTexture;
-                SDL_Rect textRect;
-
-                textSurface = TTF_RenderText_Solid(font, "Restart (R)", color);
-                textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-                textRect = {restartButtonRect.x + (restartButtonRect.w - textSurface->w) / 2, restartButtonRect.y, textSurface->w, textSurface->h};
-                SDL_FreeSurface(textSurface);
-                SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
-                SDL_DestroyTexture(textTexture);
-
-                textSurface = TTF_RenderText_Solid(font, "Home (H)", color);
-                textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-                textRect = {homeButtonRect.x + (homeButtonRect.w - textSurface->w) / 2, homeButtonRect.y, textSurface->w, textSurface->h};
-                SDL_FreeSurface(textSurface);
-                SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
-                SDL_DestroyTexture(textTexture);
-
-                std::string scoreText = "Score: " + std::to_string(score);
-                textSurface = TTF_RenderText_Solid(font, scoreText.c_str(), color);
-                textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-                textRect = {SCREEN_WIDTH / 2 - textSurface->w / 2, SCREEN_HEIGHT / 2 - 100, textSurface->w, textSurface->h};
-                SDL_FreeSurface(textSurface);
-                SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
-                SDL_DestroyTexture(textTexture);
-
-                std::string highscoreText = "Highscore: " + std::to_string(highscore);
-                textSurface = TTF_RenderText_Solid(font, highscoreText.c_str(), color);
-                textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-                textRect = {SCREEN_WIDTH / 2 - textSurface->w / 2, SCREEN_HEIGHT / 2 - 150, textSurface->w, textSurface->h};
-                SDL_FreeSurface(textSurface);
-                SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
-                SDL_DestroyTexture(textTexture);
-
-                TTF_CloseFont(font);
-            }
-            else
-            {
-                std::cout << "TTF_OpenFont failed: " << TTF_GetError() << std::endl;
-            }
+            renderDeathScreen();
         }
     }
 
     SDL_RenderPresent(renderer);
 }
 
+// Renders the main menu
 void Game::renderMenu()
 {
     SDL_RenderCopy(renderer, titleTextTexture, NULL, &titleTextRect);
@@ -669,6 +655,64 @@ void Game::renderMenu()
     SDL_RenderCopy(renderer, playTextTexture2, NULL, &playTextRect2);
 }
 
+// Renders the death screen
+// Todo? Match the impelementation style with the rest of the code
+void Game::renderDeathScreen()
+{
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200);
+    SDL_RenderFillRect(renderer, NULL);
+
+    SDL_Color color = {255, 255, 255, 255};
+    SDL_Surface *textSurface;
+    SDL_Texture *textTexture;
+    SDL_Rect textRect;
+
+    textSurface = TTF_RenderText_Solid(titleFont, "Restart (R)", color);
+    textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    textRect = {restartButtonRect.x + (restartButtonRect.w - textSurface->w) / 2, restartButtonRect.y, textSurface->w, textSurface->h};
+    SDL_FreeSurface(textSurface);
+    SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+    SDL_DestroyTexture(textTexture);
+
+    textSurface = TTF_RenderText_Solid(titleFont, "Home (H)", color);
+    textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    textRect = {homeButtonRect.x + (homeButtonRect.w - textSurface->w) / 2, homeButtonRect.y, textSurface->w, textSurface->h};
+    SDL_FreeSurface(textSurface);
+    SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+    SDL_DestroyTexture(textTexture);
+
+    string scoreText = "Score: " + to_string(score);
+    textSurface = TTF_RenderText_Solid(titleFont, scoreText.c_str(), color);
+    textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    textRect = {SCREEN_WIDTH / 2 - textSurface->w / 2, SCREEN_HEIGHT / 2 - 100, textSurface->w, textSurface->h};
+    SDL_FreeSurface(textSurface);
+    SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+    SDL_DestroyTexture(textTexture);
+
+    string highscoreText = "Highscore: " + to_string(highscore);
+    textSurface = TTF_RenderText_Solid(titleFont, highscoreText.c_str(), color);
+    textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    textRect = {SCREEN_WIDTH / 2 - textSurface->w / 2, SCREEN_HEIGHT / 2 - 150, textSurface->w, textSurface->h};
+    SDL_FreeSurface(textSurface);
+    SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+    SDL_DestroyTexture(textTexture);
+}
+
+// ============================== RESETING CARS POSITION ============================== //
+// Reset car positions after death or escape.
+void Game::resetCars()
+{
+    blueCar.destRect = {LANE_1, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
+    redCar.destRect = {LANE_4, SCREEN_HEIGHT - 100, CAR_WIDTH, CAR_HEIGHT};
+    score = 0;
+    obstacles.clear();
+    spawnRate = 80;
+    obstacleSpeed = 6;
+}
+
+// ============================= RESOURCE MANAGEMENT ============================= //
+// Cleans up the memory when the program closes.
 void Game::clean()
 {
     SDL_DestroyTexture(blueCar.texture);
@@ -694,21 +738,23 @@ void Game::clean()
     saveHighscore();
 }
 
+// ============================== HIGHSCORE MANAGEMENT ============================== //
+// Uses file i/o to save and load the highscore from player.dat with a simple XOR encoding step.
 void Game::loadHighscore()
 {
-    std::ifstream file("player.dat", std::ios::binary);
+    ifstream file("player.dat", ios::binary);
     if (file.is_open())
     {
         int encodedHighscore;
         file.read(reinterpret_cast<char *>(&encodedHighscore), sizeof(encodedHighscore));
-        highscore = encodedHighscore ^ 0xA5A5A5A5; // Simple XOR encoding
+        highscore = encodedHighscore ^ 0xA5A5A5A5;
         file.close();
     }
 }
 
 void Game::saveHighscore()
 {
-    std::ofstream file("player.dat", std::ios::binary);
+    ofstream file("player.dat", ios::binary);
     if (file.is_open())
     {
         int encodedHighscore = highscore ^ 0xA5A5A5A5; // Simple XOR encoding
@@ -717,6 +763,8 @@ void Game::saveHighscore()
     }
 }
 
+// ============================= MAIN GAME LOOP ============================= //
+// Runs the main game loop with stable frame timing, handling events, updates, and rendering.
 Game *game = nullptr;
 
 int main(int argc, char *argv[])
@@ -726,12 +774,6 @@ int main(int argc, char *argv[])
 
     Uint32 frameStart;
     int frameTime;
-
-    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
-    {
-        std::cerr << "SDL_mixer could not initialize! SDL_mixer Error: " << Mix_GetError() << std::endl;
-        return -1;
-    }
 
     game = new Game();
     game->init("Two Cars Game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, false);
@@ -743,6 +785,7 @@ int main(int argc, char *argv[])
         game->update();
         game->render();
 
+        // Limits frame rate to 60 FPS.
         frameTime = SDL_GetTicks() - frameStart;
         if (frameDelay > frameTime)
         {
